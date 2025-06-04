@@ -11,6 +11,11 @@ ADDR_TORQUE_ENABLE          = 64
 # Error
 ADDR_ERROR                  = 70
 
+# Velocity PID Gains
+ADDR_VELOCITY_P_GAIN        = 76
+ADDR_VELOCITY_I_GAIN        = 78
+ADDR_VELOCITY_D_GAIN        = 80
+
 # Reading
 ADDR_PRESENT_POSITION       = 132
 ADDR_PRESENT_VELOCITY       = 128

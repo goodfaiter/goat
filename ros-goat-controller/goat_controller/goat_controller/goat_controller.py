@@ -30,8 +30,10 @@ class GoatController(Node):
 
         self.servo = Dynamixel(ID=[11, 12, 13, 14], descriptive_device_name="DYNAMIXEL_GOAT", series_name=["xw", "xw", "xw", "xw"], baudrate=1000000, port_name="/dev/ttyUSB0")
         self.servo.begin_communication()
-        self.servo.set_current_limit(2000, ID="all")
+        self.servo.disable_torque(False, ID="all")
+        self.servo.set_current_limit(1000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
+        self.servo.set_velocity_pid(10, 192, 0, ID="all")
 
         self.ID_FRONT_LEFT = 11
         self.ID_BACK_LEFT = 12
