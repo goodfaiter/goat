@@ -6,7 +6,10 @@ ADDR_MAX_POSITION_LIMIT     = 48
 ADDR_MIN_POSITION_LIMIT     = 52
 
 # Config RAM
-ADDR_TORQUE_ENABLE          = 64         
+ADDR_TORQUE_ENABLE          = 64   
+
+# Error
+ADDR_ERROR                  = 70
 
 # Reading
 ADDR_PRESENT_POSITION       = 132

@@ -145,6 +145,23 @@ class Dynamixel:
             _, dxl_comm_result, dxl_error = self.packet_handler.ping(self.port_handler, selected_ID)
             self._print_error_msg("Ping", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID)
 
+    def set_current_limit(self, max_current_ma, ID = None):
+        selected_IDs = self.fetch_and_check_ID(ID)
+        for selected_ID in selected_IDs:
+
+            # Limit max current according to the model
+            # series = self.series_name[selected_ID]
+            # if series == "xl":
+            #     max_current_ma = max(0, min(1000, max_current_ma))
+            # else:
+            #     max_current_ma = max(0, min(1000, max_current_ma))
+
+            # Transform to int range with one increment being 2.69 mA. 1193 is max range
+            int_max_current_ma = min(1193, int(max_current_ma/2.69))
+
+            self.packet_handler.write2ByteTxRx(self.portHandler, selected_ID, ADDR_CURRENT_LIMIT, int_max_current_ma)
+
+
     def set_operating_mode(self, mode, ID = None, print_only_if_error = False):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
@@ -234,6 +251,21 @@ class Dynamixel:
             return reading[0]
         else:
             return reading
+        
+    def get_errors(self, ID = None):
+        selected_IDs = self.fetch_and_check_ID(ID)
+        readings = []
+        for selected_ID in selected_IDs:
+            error_status, result, error = self.packet_handler.read1ByteTxRx(self.port_handler, selected_ID, ADDR_ERROR)
+            if result == COMM_SUCCESS:
+                if error_status & 0b00000001: readings.append([selected_ID, "Input voltage error"])
+                if error_status & 0b00000100: readings.append([selected_ID, "Overheating"])
+                if error_status & 0b00001000: readings.append([selected_ID, "Motor Encoder Error"])
+                if error_status & 0b00010000: readings.append([selected_ID, "Electrical shock"])
+                if error_status & 0b00100000: readings.append([selected_ID, "Overload"])
+            else:
+                print(f"Communication error: {error}")
+        return readings
 
     def read_from_address(self, number_of_bytes, ADDR, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)

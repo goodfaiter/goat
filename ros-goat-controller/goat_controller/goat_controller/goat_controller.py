@@ -30,6 +30,7 @@ class GoatController(Node):
 
         self.servo = Dynamixel(ID=[11, 12, 13, 14], descriptive_device_name="DYNAMIXEL_GOAT", series_name=["xw", "xw", "xw", "xw"], baudrate=1000000, port_name="/dev/ttyUSB0")
         self.servo.begin_communication()
+        self.servo.set_current_limit(2000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
 
         self.ID_FRONT_LEFT = 11
@@ -73,6 +74,11 @@ class GoatController(Node):
 
 
     def _state_callback(self):
+        # Read errors
+        errors = self.servo.get_errors(ID="all")
+        for error in errors:
+            self.get_logger().info(f"Drive {error[0]} has error {error[1]}")
+
         # Publish measured velocity
         front_left_wheel_velocity_raw = self.DIR_FRONT_LEFT * self.servo.read_velocity(self.ID_FRONT_LEFT)
         back_left_wheel_velocity_raw = self.DIR_BACK_LEFT * self.servo.read_velocity(self.ID_BACK_LEFT)
