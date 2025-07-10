@@ -33,7 +33,8 @@ class GoatController(Node):
         self.servo.disable_torque(False, ID="all")
         self.servo.set_current_limit(1000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
-        self.servo.set_velocity_pid(10, 192, 0, ID="all")
+        self.servo.set_velocity_pid(100, 1920, 0, ID="all")
+        self.servo.enable_torque(False, ID="all")
 
         self.ID_FRONT_LEFT = 11
         self.ID_BACK_LEFT = 12
