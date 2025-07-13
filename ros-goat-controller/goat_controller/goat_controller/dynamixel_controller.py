@@ -51,10 +51,7 @@ class Dynamixel:
         self.groupSyncReadCurrent = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_CURRENT, LEN_CURRENT)
 
         for i in self.ID:
-            dxl_addparam_result = self.groupSyncReadPosition.addParam(i)
-            if not dxl_addparam_result:
-                print(f"[ID:{i}] groupSyncRead addParam failed")
-                quit()
+            self.groupSyncReadPosition.addParam(i)
             self.groupSyncReadVelocity.addParam(i)
             self.groupSyncReadCurrent.addParam(i)
 
