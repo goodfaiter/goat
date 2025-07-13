@@ -40,7 +40,15 @@ class Dynamixel:
 
         # Communication settings
         self.port_handler = PortHandler(self.port_name)
-        self.packet_handler = PacketHandler(2)
+        self.packet_handler = PacketHandler(PROTOCOL_VERSION)
+
+        # Setup group read/writes
+        self.groupSyncWritePosition = GroupSyncWrite(self.port_handler, self.packet_handler, ADDR_GOAL_POSITION, LEN_POSITION)
+        self.groupSyncWriteVelocity = GroupSyncWrite(self.port_handler, self.packet_handler, ADDR_GOAL_VELOCITY, LEN_VELOCITY)
+        self.groupSyncWriteCurrent = GroupSyncWrite(self.port_handler, self.packet_handler, ADDR_GOAL_CURRENT, LEN_CURRENT)
+        self.groupSyncReadPosition = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_POSITION, LEN_POSITION)
+        self.groupSyncReadVelocity = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
+        self.groupSyncReadCurrent = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_CURRENT, LEN_CURRENT)
 
     def fetch_and_check_ID(self, ID):
         if self.multiple_motors:
@@ -118,6 +126,7 @@ class Dynamixel:
 
     def enable_torque(self, print_only_if_error=False, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
+        
         for selected_ID in selected_IDs:
             dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 1)
             self._print_error_msg("Torque enable", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=print_only_if_error)
@@ -174,7 +183,6 @@ class Dynamixel:
             # Re-enable torque
             self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 1)
 
-
     def set_operating_mode(self, mode, ID = None, print_only_if_error = False):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
@@ -212,58 +220,33 @@ class Dynamixel:
                 return value - max_value
         else:
             print("Enter valid operating mode. Select one of:\n" + str(list(max_register_value.keys())))
+    
+    def receive_group_sync(self, group_sync: GroupSyncRead) -> None:
+        dxl_comm_result = group_sync.txRxPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            self._print_error_msg("Receive group sync", dxl_comm_result=dxl_comm_result, dxl_error="", selected_ID="", print_only_if_error=True)
+
+    def read_from_group_sync(self, ids, group_sync: GroupSyncRead, address, len) -> list:
+        vals = []
+        for id in ids:
+            if group_sync.isAvailable(id, address, len):
+                vals.append(group_sync.getData(id, address, len))
+        return vals
 
     def read_position(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        reading = []
-        for selected_ID in selected_IDs:
-            position, dxl_comm_result, dxl_error = self.packet_handler.read4ByteTxRx(self.port_handler, selected_ID, ADDR_PRESENT_POSITION)
-            self._print_error_msg("Read position", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-            reading.append(self.compensate_twos_complement(position, "position"))
-            
-        if len(selected_IDs) == 1:
-            return reading[0]
-        else:
-            return reading
+        self.receive_group_sync(self.groupSyncReadPosition)
+        return self.read_from_group_sync(selected_IDs, self.groupSyncReadPosition, ADDR_PRESENT_POSITION, LEN_POSITION)
             
     def read_velocity(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        reading = []
-        for selected_ID in selected_IDs:
-            velocity, dxl_comm_result, dxl_error = self.packet_handler.read4ByteTxRx(self.port_handler, selected_ID, ADDR_PRESENT_VELOCITY)
-            self._print_error_msg("Read velocity", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-            reading.append(self.compensate_twos_complement(velocity, "velocity"))
-        
-        if len(selected_IDs) == 1:
-            return reading[0]
-        else:
-            return reading
+        self.receive_group_sync(self.groupSyncReadVelocity)
+        return self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
 
     def read_current(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        reading = []
-        for selected_ID in selected_IDs:
-            current, dxl_comm_result, dxl_error = self.packet_handler.read2ByteTxRx(self.port_handler, selected_ID, ADDR_PRESENT_CURRENT)
-            self._print_error_msg("Read cuurent", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-            reading.append(self.compensate_twos_complement(current, "current"))
-
-        if len(selected_IDs) == 1:
-            return reading[0]
-        else:
-            return reading
-
-    def read_pwm(self, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        reading = []
-        for selected_ID in selected_IDs:
-            pwm, dxl_comm_result, dxl_error = self.packet_handler.read2ByteTxRx(self.port_handler, selected_ID, ADDR_PRESENT_PWM)
-            self._print_error_msg("Read pwm", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-            reading.append(self.compensate_twos_complement(pwm, "pwm"))
-
-        if len(selected_IDs) == 1:
-            return reading[0]
-        else:
-            return reading
+        self.receive_group_sync(self.groupSyncReadCurrent)
+        return self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
         
     def get_errors(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
@@ -280,75 +263,37 @@ class Dynamixel:
                 print(f"Communication error: {error}")
         return readings
 
-    def read_from_address(self, number_of_bytes, ADDR, ID = None):
+    def write_to_2bytes_group_sync(self, vals: list, ids: list, group_sync: GroupSyncWrite) -> None:
+        # Queue up the messages to send
+        for i, val in enumerate(vals):
+            bytes = [DXL_LOBYTE(val), DXL_HIBYTE(val)]
+            group_sync.addParam(ids[i], bytes)
+
+    def write_to_4bytes_group_sync(self, vals: list, ids: list, group_sync: GroupSyncWrite) -> None:
+        # Queue up the messages to send
+        for i, val in enumerate(vals):
+            bytes = [DXL_LOBYTE(DXL_LOWORD(val)), DXL_HIBYTE(DXL_LOWORD(val)), DXL_LOBYTE(DXL_HIWORD(val)), DXL_HIBYTE(DXL_HIWORD(val))]
+            group_sync.addParam(ids[i], bytes)
+
+    def send_group_sync(self, group_sync: GroupSyncRead):
+        # Send
+        dxl_comm_result = group_sync.txPacket()
+        # Check comms
+        if dxl_comm_result != COMM_SUCCESS:
+            self._print_error_msg("Write position", dxl_comm_result=dxl_comm_result, dxl_error="", selected_ID="", print_only_if_error=True)
+        group_sync.clearParam()
+
+    def write_position(self, pos: list, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        reading = []
-        for selected_ID in selected_IDs:
-
-            twos_complement_key = ""
-            if number_of_bytes == 1:
-                value, dxl_comm_result, dxl_error = self.packet_handler.read1ByteTxRx(self.port_handler, selected_ID, ADDR)
-                twos_complement_key = "1 byte"
-            elif number_of_bytes == 2:
-                value, dxl_comm_result, dxl_error = self.packet_handler.read2ByteTxRx(self.port_handler, selected_ID, ADDR)
-                twos_complement_key = "2 bytes"
-            else:
-                value, dxl_comm_result, dxl_error = self.packet_handler.read4ByteTxRx(self.port_handler, selected_ID, ADDR)
-                twos_complement_key = "4 bytes"
-
-            self._print_error_msg("Read address", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-            reading.append(self.compensate_twos_complement(value, twos_complement_key))
-            
-        if len(selected_IDs) == 1:
-            return reading[0]
-        else:
-            return reading
-
-    def write_position(self, pos, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write4ByteTxRx(self.port_handler, selected_ID, ADDR_GOAL_POSITION, int(pos))
-            self._print_error_msg("Write position", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-
-    def write_velocity(self, vel, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write4ByteTxRx(self.port_handler, selected_ID, ADDR_GOAL_VELOCITY, int(vel))
-            self._print_error_msg("Write velocity", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
+        self.write_to_4bytes_group_sync(pos, selected_IDs, self.groupSyncWritePosition)
+        self.send_group_sync(self.groupSyncWritePosition)
         
-    def write_current(self, current, ID = None):
+    def write_velocity(self, vels: list, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_GOAL_CURRENT, int(current))
-            self._print_error_msg("Write current", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-    
-    def write_pwm(self, pwm, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_GOAL_PWM, int(pwm))
-            self._print_error_msg("Write pwm", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
+        self.write_to_4bytes_group_sync(vels, selected_IDs, self.groupSyncWriteVelocity)
+        self.send_group_sync(self.groupSyncWriteVelocity)
 
-    def write_profile_velocity(self, profile_vel, ID = None):
+    def write_current(self, currents: list, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write4ByteTxRx(self.port_handler, selected_ID, ADDR_PROFILE_VELOCITY, int(profile_vel))
-            self._print_error_msg("Write profile velocity", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-        
-    def write_profile_acceleration(self, profile_acc, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-            dxl_comm_result, dxl_error = self.packet_handler.write4ByteTxRx(self.port_handler, selected_ID, ADDR_PROFILE_ACCELERATION, int(profile_acc))
-            self._print_error_msg("Write profile acceleration", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
-        
-    def write_to_address(self, value, number_of_bytes, ADDR, ID = None):
-        selected_IDs = self.fetch_and_check_ID(ID)
-        for selected_ID in selected_IDs:
-
-            if number_of_bytes == 1: 
-                dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR, int(value))
-            elif number_of_bytes == 2: 
-                dxl_comm_result, dxl_error = self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR, int(value))
-            else: 
-                dxl_comm_result, dxl_error = self.packet_handler.write4ByteTxRx(self.port_handler, selected_ID, ADDR, int(value))
-                    
-            self._print_error_msg("Write to address", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=True)
+        self.write_to_2bytes_group_sync(currents, selected_IDs, self.groupSyncWriteCurrent)
+        self.send_group_sync(self.groupSyncWriteCurrent)

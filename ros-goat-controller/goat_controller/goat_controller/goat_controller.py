@@ -10,6 +10,8 @@ class GoatController(Node):
     def __init__(self):
         super().__init__('goat_controller')
 
+        self.check_error = False
+
         self.joystick_topic = self.declare_parameter('joystick_topic', '/joy').get_parameter_value().string_value
         self.commanded_velocity_topic = self.declare_parameter('commanded_velocity_topic', '/commanded_velocity').get_parameter_value().string_value
         self.measured_velocity_topic = self.declare_parameter('measured_velocity_topic', '/measured_velocity').get_parameter_value().string_value
@@ -28,9 +30,9 @@ class GoatController(Node):
         timer_period = 0.05  # seconds -> 20Hz
         self.state_timer = self.create_timer(timer_period, self._state_callback)
 
-        self.servo = Dynamixel(ID=[11, 12, 13, 14], descriptive_device_name="DYNAMIXEL_GOAT", series_name=["xw", "xw", "xw", "xw"], baudrate=1000000, port_name="/dev/ttyUSB0")
+        self.servo = Dynamixel(ID=[11, 12, 13, 14], descriptive_device_name="DYNAMIXEL_GOAT", port_name="/dev/ttyUSB0", baudrate=1000000, series_name=["xm", "xm", "xm", "xm"])
         self.servo.begin_communication()
-        self.servo.disable_torque(False, ID="all")
+        self.servo.disable_torque(False, ID="all") # Should be done before messing with gains and such
         self.servo.set_current_limit(1000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
         self.servo.set_velocity_pid(100, 1920, 0, ID="all")
@@ -61,11 +63,13 @@ class GoatController(Node):
 
         left_wheel_dynamixel_velocity = int(left_wheel_velocity * 310)
         right_wheel_dynamixel_velocity = int(right_wheel_velocity * 310)
+        ids = [self.ID_FRONT_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_LEFT, self.ID_BACK_RIGHT]
+        vels = [self.DIR_FRONT_LEFT * left_wheel_dynamixel_velocity,
+                self.DIR_FRONT_RIGHT * right_wheel_dynamixel_velocity, 
+                self.DIR_BACK_LEFT * left_wheel_dynamixel_velocity,
+                self.DIR_BACK_RIGHT * right_wheel_dynamixel_velocity]
 
-        self.servo.write_velocity(self.DIR_FRONT_LEFT * left_wheel_dynamixel_velocity, self.ID_FRONT_LEFT)
-        self.servo.write_velocity(self.DIR_FRONT_RIGHT * right_wheel_dynamixel_velocity, self.ID_FRONT_RIGHT)
-        self.servo.write_velocity(self.DIR_BACK_LEFT * left_wheel_dynamixel_velocity, self.ID_BACK_LEFT)
-        self.servo.write_velocity(self.DIR_BACK_RIGHT * right_wheel_dynamixel_velocity, self.ID_BACK_RIGHT)
+        self.servo.write_velocity(vels, ids)
 
         left_wheel_velocity = left_wheel_dynamixel_velocity * 0.226
         right_wheel_velocity = right_wheel_dynamixel_velocity * 0.226
@@ -78,39 +82,31 @@ class GoatController(Node):
 
     def _state_callback(self):
         # Read errors
-        errors = self.servo.get_errors(ID="all")
-        for error in errors:
-            self.get_logger().info(f"Drive {error[0]} has error {error[1]}")
+        if self.check_error:
+            errors = self.servo.get_errors(ID="all")
+            for error in errors:
+                self.get_logger().info(f"Drive {error[0]} has error {error[1]}")
+
+        # Read and scale/apply direction to wheels
+        ids = [self.ID_FRONT_LEFT, self.ID_BACK_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_RIGHT]
+        wheel_velocity = self.servo.read_velocity(ids)
+        wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.226
+        wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.226
+        wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.226
+        wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.226
 
         # Publish measured velocity
-        front_left_wheel_velocity_raw = self.DIR_FRONT_LEFT * self.servo.read_velocity(self.ID_FRONT_LEFT)
-        back_left_wheel_velocity_raw = self.DIR_BACK_LEFT * self.servo.read_velocity(self.ID_BACK_LEFT)
-        front_right_wheel_velocity_raw = self.DIR_FRONT_RIGHT * self.servo.read_velocity(self.ID_FRONT_RIGHT)
-        back_right_wheel_velocity_raw = self.DIR_BACK_RIGHT * self.servo.read_velocity(self.ID_BACK_RIGHT)
-
-        front_left_wheel_measured_velocity = front_left_wheel_velocity_raw * 0.226
-        back_left_wheel_measured_velocity = back_left_wheel_velocity_raw * 0.226
-        front_right_wheel_measured_velocity = front_right_wheel_velocity_raw * 0.226
-        back_right_wheel_measured_velocity = back_right_wheel_velocity_raw * 0.226
-
         measured_velocity_msg = Float32MultiArray()
-        measured_velocity_msg.data = [front_left_wheel_measured_velocity, back_left_wheel_measured_velocity, front_right_wheel_measured_velocity, back_right_wheel_measured_velocity]
+        measured_velocity_msg.data = wheel_velocity
         self.measured_velocity_publisher.publish(measured_velocity_msg)
 
         # Read and scale current consumption
-        front_left_wheel_current_raw = self.servo.read_current(self.ID_FRONT_LEFT)
-        back_left_wheel_current_raw = self.servo.read_current(self.ID_BACK_LEFT)
-        front_right_wheel_current_raw = self.servo.read_current(self.ID_FRONT_RIGHT)
-        back_right_wheel_current_raw = self.servo.read_current(self.ID_BACK_RIGHT)
-
-        front_left_wheel_current = front_left_wheel_current_raw * 2.69e-3  # Scale raw current to Amps
-        back_left_wheel_current =  back_left_wheel_current_raw * 2.69e-3  # Scale raw current to Amps
-        front_right_wheel_current = self.DIR_FRONT_RIGHT * front_right_wheel_current_raw * 2.69e-3  # Scale raw current to Amps
-        back_right_wheel_current = self.DIR_BACK_RIGHT * back_right_wheel_current_raw * 2.69e-3  # Scale raw current to Amps
+        wheel_current = self.servo.read_velocity(ids)
+        wheel_current = [curr * 2.69e-3 for curr in wheel_current]
 
         # Publish current consumption
         current_consumption_msg = Float32MultiArray()
-        current_consumption_msg.data = [front_left_wheel_current, back_left_wheel_current, front_right_wheel_current, back_right_wheel_current]
+        current_consumption_msg.data = wheel_current
         self.current_consumption_publisher.publish(current_consumption_msg)
 
 

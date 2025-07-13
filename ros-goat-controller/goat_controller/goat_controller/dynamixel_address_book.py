@@ -1,3 +1,6 @@
+# Protocol version
+PROTOCOL_VERSION = 2.0
+
 # Control table address
 # config EEPROM
 ADDR_OPERATING_MODE         = 11
@@ -33,6 +36,11 @@ ADDR_PROFILE_ACCELERATION   = 108
 # Status
 ADDR_MOVING                 = 122
 ADDR_MOVING_STATUS          = 123
+
+# Byte lens
+LEN_VELOCITY = 4  # uint32_t (0.229 rpm/unit)
+LEN_POSITION = 4  # uint32_t (0-4095 for 0-360°)
+LEN_CURRENT = 2  # uint16_t (1 mA/unit)
 
 
 operating_modes_xm = {
