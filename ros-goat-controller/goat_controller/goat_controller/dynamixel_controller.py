@@ -50,6 +50,11 @@ class Dynamixel:
         self.groupSyncReadVelocity = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
         self.groupSyncReadCurrent = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_CURRENT, LEN_CURRENT)
 
+        for id in self.ID:
+            self.groupSyncReadPosition.addParam(id)
+            self.groupSyncReadVelocity.addParam(id)
+            self.groupSyncReadCurrent.addParam(id)
+
     def fetch_and_check_ID(self, ID):
         if self.multiple_motors:
             if ID is None:
