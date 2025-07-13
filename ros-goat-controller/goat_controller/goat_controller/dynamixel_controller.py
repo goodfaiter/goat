@@ -228,18 +228,28 @@ class Dynamixel:
 
     def read_position(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
+        for id in selected_IDs:
+            self.groupSyncReadPosition.addParam(id)
         self.receive_group_sync(self.groupSyncReadPosition)
-        return self.read_from_group_sync(selected_IDs, self.groupSyncReadPosition, ADDR_PRESENT_POSITION, LEN_POSITION)
+        pos = self.read_from_group_sync(selected_IDs, self.groupSyncReadPosition, ADDR_PRESENT_POSITION, LEN_POSITION)
+        self.groupSyncReadPosition.clearParam()
+        return pos
             
     def read_velocity(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
+        for id in selected_IDs:
+            self.groupSyncReadVelocity.addParam(id)
         self.receive_group_sync(self.groupSyncReadVelocity)
-        return self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
+        vel =  self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
+        return vel
 
     def read_current(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
+        for id in selected_IDs:
+            self.groupSyncReadCurrent.addParam(id)
         self.receive_group_sync(self.groupSyncReadCurrent)
-        return self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
+        cur =  self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
+        return cur
         
     def get_errors(self, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
