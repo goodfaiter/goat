@@ -50,13 +50,13 @@ class Dynamixel:
         self.groupSyncReadVelocity = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
         self.groupSyncReadCurrent = GroupSyncRead(self.port_handler, self.packet_handler, ADDR_PRESENT_CURRENT, LEN_CURRENT)
 
-        for id in self.ID:
-            dxl_addparam_result = self.groupSyncReadPosition.addParam(id)
+        for i in self.ID:
+            dxl_addparam_result = self.groupSyncReadPosition.addParam(i)
             if not dxl_addparam_result:
-                print(f"[ID:{id}] groupSyncRead addParam failed")
+                print(f"[ID:{i}] groupSyncRead addParam failed")
                 quit()
-            self.groupSyncReadVelocity.addParam(id)
-            self.groupSyncReadCurrent.addParam(id)
+            self.groupSyncReadVelocity.addParam(i)
+            self.groupSyncReadCurrent.addParam(i)
 
     def fetch_and_check_ID(self, ID):
         if self.multiple_motors:
