@@ -31,6 +31,13 @@ class GoatController(Node):
         self.state_timer = self.create_timer(timer_period, self._state_callback)
 
         self.servo = Dynamixel(ID=[11, 12, 13, 14], descriptive_device_name="DYNAMIXEL_GOAT", port_name="/dev/ttyUSB0", baudrate=1000000, series_name=["xm", "xm", "xm", "xm"])
+
+
+        for i in [11, 12, 13, 14]:
+            dxl_addparam_result = self.servo.groupSyncReadVelocity.addParam(i)
+            if not dxl_addparam_result:
+                self.get_logger().info(f"[ID:{i}] groupSyncRead addParam failed")
+
         self.servo.begin_communication()
         self.servo.disable_torque(False, ID="all") # Should be done before messing with gains and such
         self.servo.set_current_limit(1000, ID="all")
@@ -104,16 +111,16 @@ class GoatController(Node):
         self.measured_velocity_publisher.publish(measured_velocity_msg)
 
         # Read and scale current consumption
-        wheel_current = self.servo.read_velocity(ids)
-        if wheel_current:
-            wheel_current = [curr * 2.69e-3 for curr in wheel_current]
-        else:
-            wheel_current = []
+        # wheel_current = self.servo.read_velocity(ids)
+        # if wheel_current:
+        #     wheel_current = [curr * 2.69e-3 for curr in wheel_current]
+        # else:
+        #     wheel_current = []
 
-        # Publish current consumption
-        current_consumption_msg = Float32MultiArray()
-        current_consumption_msg.data = wheel_current
-        self.current_consumption_publisher.publish(current_consumption_msg)
+        # # Publish current consumption
+        # current_consumption_msg = Float32MultiArray()
+        # current_consumption_msg.data = wheel_current
+        # self.current_consumption_publisher.publish(current_consumption_msg)
 
 
 def main(args=None):
