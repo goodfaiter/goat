@@ -72,7 +72,7 @@ class Dynamixel:
         else:
             return [self.ID]
 
-    def begin_communication(self, enable_torque = True):
+    def begin_communication(self):
         # Open port
         try: 
             self.port_handler.openPort()
@@ -89,13 +89,6 @@ class Dynamixel:
         except:
             print("!! Failed to set baudrate for:", self.descriptive_device_name)
             sys.exit()
-
-        if enable_torque:
-            if self.multiple_motors:
-                for ID in self.ID:
-                    self.enable_torque(ID = ID)
-            else:
-                self.enable_torque()
 
     def end_communication(self, disable_torque = True):
         if disable_torque:

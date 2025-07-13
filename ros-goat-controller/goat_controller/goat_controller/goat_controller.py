@@ -90,10 +90,13 @@ class GoatController(Node):
         # Read and scale/apply direction to wheels
         ids = [self.ID_FRONT_LEFT, self.ID_BACK_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_RIGHT]
         wheel_velocity = self.servo.read_velocity(ids)
-        wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.226
-        wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.226
-        wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.226
-        wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.226
+        if wheel_velocity:
+            wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.226
+            wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.226
+            wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.226
+            wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.226
+        else:
+            wheel_velocity = []
 
         # Publish measured velocity
         measured_velocity_msg = Float32MultiArray()
@@ -102,7 +105,10 @@ class GoatController(Node):
 
         # Read and scale current consumption
         wheel_current = self.servo.read_velocity(ids)
-        wheel_current = [curr * 2.69e-3 for curr in wheel_current]
+        if wheel_current:
+            wheel_current = [curr * 2.69e-3 for curr in wheel_current]
+        else:
+            wheel_current = []
 
         # Publish current consumption
         current_consumption_msg = Float32MultiArray()
