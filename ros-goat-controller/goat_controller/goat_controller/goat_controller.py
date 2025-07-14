@@ -47,17 +47,16 @@ class GoatController(Node):
         self.servo.disable_torque(False, ID="all")  # Should be done before messing with gains and such
         self.servo.set_current_limit(1000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
-        self.servo.set_velocity_pid(100, 1920, 0, ID="all")
         self.servo.enable_torque(False, ID="all")
 
         self.ID_FRONT_LEFT = 11
-        self.ID_BACK_LEFT = 12
         self.ID_FRONT_RIGHT = 14
+        self.ID_BACK_LEFT = 12
         self.ID_BACK_RIGHT = 13
 
         self.DIR_FRONT_LEFT = -1
-        self.DIR_BACK_LEFT = -1
         self.DIR_FRONT_RIGHT = 1
+        self.DIR_BACK_LEFT = -1
         self.DIR_BACK_RIGHT = 1
 
     def joystick_callback(self, msg: Joy):
@@ -100,12 +99,12 @@ class GoatController(Node):
                 self.get_logger().info(f"Drive {error[0]} has error {error[1]}")
 
         # Read and scale/apply direction to wheels
-        ids = [self.ID_FRONT_LEFT, self.ID_BACK_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_RIGHT]
+        ids = [self.ID_FRONT_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_LEFT, self.ID_BACK_RIGHT]
         wheel_velocity = self.servo.read_velocity(ids)
         if wheel_velocity:
             wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.229
-            wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.229
-            wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.229
+            wheel_velocity[1] *= self.DIR_FRONT_RIGHT * 0.229
+            wheel_velocity[2] *= self.DIR_BACK_LEFT * 0.229
             wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.229
         else:
             wheel_velocity = []
