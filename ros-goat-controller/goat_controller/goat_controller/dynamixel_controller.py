@@ -1,9 +1,10 @@
 import sys
-from dynamixel_sdk import * 
+from dynamixel_sdk import *
 from .dynamixel_address_book import *
 
+
 class Dynamixel:
-    def __init__(self, ID, descriptive_device_name, port_name, baudrate, series_name = "xm"):
+    def __init__(self, ID, descriptive_device_name, port_name, baudrate, series_name="xm"):
         # Communication inputs
         if type(ID) == list:
             self.multiple_motors = True
@@ -14,7 +15,7 @@ class Dynamixel:
         self.descriptive_device_name = descriptive_device_name
         self.port_name = port_name
         self.baudrate = baudrate
-        
+
         # Set series name
         if type(self.ID) == list:
             if type(series_name) == list and len(series_name) == len(self.ID):
@@ -74,7 +75,7 @@ class Dynamixel:
 
     def begin_communication(self):
         # Open port
-        try: 
+        try:
             self.port_handler.openPort()
             print("Port open successfully for:", self.descriptive_device_name)
         except:
@@ -92,14 +93,14 @@ class Dynamixel:
 
     def end_communication(self):
         # Close port
-        try: 
+        try:
             self.port_handler.closePort()
             print("Port closed successfully for:", self.descriptive_device_name)
         except:
             print("!! Failed to close port for:", self.descriptive_device_name)
             sys.exit()
 
-    def _print_error_msg(self, process_name, dxl_comm_result, dxl_error, selected_ID, print_only_if_error = False):
+    def _print_error_msg(self, process_name, dxl_comm_result, dxl_error, selected_ID, print_only_if_error=False):
         if dxl_comm_result != COMM_SUCCESS:
             print("!!", process_name, "failed for:", self.descriptive_device_name)
             print("Communication error:", self.packet_handler.getTxRxResult(dxl_comm_result))
@@ -110,50 +111,70 @@ class Dynamixel:
             if not print_only_if_error:
                 print(process_name, "successful for:", self.descriptive_device_name, "ID:", selected_ID)
 
-    def enable_torque(self, print_only_if_error=False, ID = None):
+    def enable_torque(self, print_only_if_error=False, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
-        
+
         for selected_ID in selected_IDs:
             dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 1)
-            self._print_error_msg("Torque enable", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=print_only_if_error)
+            self._print_error_msg(
+                "Torque enable",
+                dxl_comm_result=dxl_comm_result,
+                dxl_error=dxl_error,
+                selected_ID=selected_ID,
+                print_only_if_error=print_only_if_error,
+            )
 
-    def disable_torque(self, print_only_if_error=False, ID = None):
+    def disable_torque(self, print_only_if_error=False, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
             dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 0)
-            self._print_error_msg("Torque disable", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=print_only_if_error)
-        
-    def is_torque_on(self, print_only_if_error=False, ID = None):
+            self._print_error_msg(
+                "Torque disable",
+                dxl_comm_result=dxl_comm_result,
+                dxl_error=dxl_error,
+                selected_ID=selected_ID,
+                print_only_if_error=print_only_if_error,
+            )
+
+    def is_torque_on(self, print_only_if_error=False, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
-            torque_status, dxl_comm_result, dxl_error = self.packet_handler.read1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE)
-            self._print_error_msg("Read torque status", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=print_only_if_error)
-            
+            torque_status, dxl_comm_result, dxl_error = self.packet_handler.read1ByteTxRx(
+                self.port_handler, selected_ID, ADDR_TORQUE_ENABLE
+            )
+            self._print_error_msg(
+                "Read torque status",
+                dxl_comm_result=dxl_comm_result,
+                dxl_error=dxl_error,
+                selected_ID=selected_ID,
+                print_only_if_error=print_only_if_error,
+            )
+
             if torque_status == False:
                 return False
 
         return True
 
-    def ping(self, ID = None):
+    def ping(self, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
             _, dxl_comm_result, dxl_error = self.packet_handler.ping(self.port_handler, selected_ID)
             self._print_error_msg("Ping", dxl_comm_result=dxl_comm_result, dxl_error=dxl_error, selected_ID=selected_ID)
 
-    def set_current_limit(self, max_current_ma, ID = None):
+    def set_current_limit(self, max_current_ma, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
-            int_max_current_ma = min(1193, int(max_current_ma/2.69)) # one increment being 2.69 mA. 1193 is max range
+            int_max_current_ma = min(1193, int(max_current_ma / 2.69))  # one increment being 2.69 mA. 1193 is max range
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_CURRENT_LIMIT, int_max_current_ma)
 
-    def set_velocity_pid(self, p: int, i: int, d: int, ID = None):
+    def set_velocity_pid(self, p: int, i: int, d: int, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
 
             was_torque_on = False
-            if self.is_torque_on(print_only_if_error = True, ID = selected_ID):
+            if self.is_torque_on(print_only_if_error=True, ID=selected_ID):
                 was_torque_on = True
-                self.disable_torque(print_only_if_error = True, ID = selected_ID)
+                self.disable_torque(print_only_if_error=True, ID=selected_ID)
 
             # Write gains (2-byte writes)
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_VELOCITY_P_GAIN, p)
@@ -161,9 +182,9 @@ class Dynamixel:
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_VELOCITY_D_GAIN, d)
 
             if was_torque_on:
-                self.enable_torque(print_only_if_error=True, ID = selected_ID)
+                self.enable_torque(print_only_if_error=True, ID=selected_ID)
 
-    def set_operating_mode(self, mode, ID = None, print_only_if_error = False):
+    def set_operating_mode(self, mode, ID=None, print_only_if_error=False):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
 
@@ -176,24 +197,33 @@ class Dynamixel:
             if mode in operating_modes:
                 # Check if torque was enabled
                 was_torque_on = False
-                if self.is_torque_on(print_only_if_error = True, ID = selected_ID):
+                if self.is_torque_on(print_only_if_error=True, ID=selected_ID):
                     was_torque_on = True
-                    self.disable_torque(print_only_if_error = True, ID = selected_ID)
+                    self.disable_torque(print_only_if_error=True, ID=selected_ID)
 
                 mode_id = operating_modes[mode]
-                dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_OPERATING_MODE, mode_id)
-                self._print_error_msg("Mode set to " + mode + " control", dxl_comm_result=dxl_comm_result, 
-                                        dxl_error=dxl_error, selected_ID=selected_ID, print_only_if_error=print_only_if_error)
+                dxl_comm_result, dxl_error = self.packet_handler.write1ByteTxRx(
+                    self.port_handler, selected_ID, ADDR_OPERATING_MODE, mode_id
+                )
+                self._print_error_msg(
+                    "Mode set to " + mode + " control",
+                    dxl_comm_result=dxl_comm_result,
+                    dxl_error=dxl_error,
+                    selected_ID=selected_ID,
+                    print_only_if_error=print_only_if_error,
+                )
 
                 if was_torque_on:
-                    self.enable_torque(print_only_if_error=True, ID = selected_ID)
+                    self.enable_torque(print_only_if_error=True, ID=selected_ID)
             else:
                 print("Enter valid operating mode. Select one of:\n" + str(list(operating_modes.keys())))
-    
+
     def receive_group_sync(self, group_sync: GroupSyncRead) -> None:
         dxl_comm_result = group_sync.txRxPacket()
         if dxl_comm_result != COMM_SUCCESS:
-            self._print_error_msg("Receive group sync", dxl_comm_result=dxl_comm_result, dxl_error="", selected_ID="", print_only_if_error=True)
+            self._print_error_msg(
+                "Receive group sync", dxl_comm_result=dxl_comm_result, dxl_error="", selected_ID="", print_only_if_error=True
+            )
 
     def read_from_group_sync(self, ids, group_sync: GroupSyncRead, address, len) -> list:
         vals = []
@@ -202,7 +232,7 @@ class Dynamixel:
                 vals.append(group_sync.getData(id, address, len))
         return vals
 
-    def read_position(self, ID = None):
+    def read_position(self, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for id in selected_IDs:
             self.groupSyncReadPosition.addParam(id)
@@ -210,36 +240,41 @@ class Dynamixel:
         pos = self.read_from_group_sync(selected_IDs, self.groupSyncReadPosition, ADDR_PRESENT_POSITION, LEN_POSITION)
         self.groupSyncReadPosition.clearParam()
         return pos
-            
-    def read_velocity(self, ID = None):
+
+    def read_velocity(self, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for id in selected_IDs:
             self.groupSyncReadVelocity.addParam(id)
         self.receive_group_sync(self.groupSyncReadVelocity)
-        vel =  self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
+        vel = self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
         self.groupSyncReadVelocity.clearParam()
         return vel
 
-    def read_current(self, ID = None):
+    def read_current(self, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for id in selected_IDs:
             self.groupSyncReadCurrent.addParam(id)
         self.receive_group_sync(self.groupSyncReadCurrent)
-        cur =  self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
+        cur = self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
         self.groupSyncReadCurrent.clearParam()
         return cur
-        
-    def get_errors(self, ID = None):
+
+    def get_errors(self, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         readings = []
         for selected_ID in selected_IDs:
             error_status, result, error = self.packet_handler.read1ByteTxRx(self.port_handler, selected_ID, ADDR_ERROR)
             if result == COMM_SUCCESS:
-                if error_status & 0b00000001: readings.append([selected_ID, "Input voltage error"])
-                if error_status & 0b00000100: readings.append([selected_ID, "Overheating"])
-                if error_status & 0b00001000: readings.append([selected_ID, "Motor Encoder Error"])
-                if error_status & 0b00010000: readings.append([selected_ID, "Electrical shock"])
-                if error_status & 0b00100000: readings.append([selected_ID, "Overload"])
+                if error_status & 0b00000001:
+                    readings.append([selected_ID, "Input voltage error"])
+                if error_status & 0b00000100:
+                    readings.append([selected_ID, "Overheating"])
+                if error_status & 0b00001000:
+                    readings.append([selected_ID, "Motor Encoder Error"])
+                if error_status & 0b00010000:
+                    readings.append([selected_ID, "Electrical shock"])
+                if error_status & 0b00100000:
+                    readings.append([selected_ID, "Overload"])
             else:
                 print(f"Communication error: {error}")
         return readings
@@ -264,17 +299,17 @@ class Dynamixel:
             self._print_error_msg("Write position", dxl_comm_result=dxl_comm_result, dxl_error="", selected_ID="", print_only_if_error=True)
         group_sync.clearParam()
 
-    def write_position(self, pos: list, ID = None):
+    def write_position(self, pos: list, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         self.write_to_4bytes_group_sync(pos, selected_IDs, self.groupSyncWritePosition)
         self.send_group_sync(self.groupSyncWritePosition)
-        
-    def write_velocity(self, vels: list, ID = None):
+
+    def write_velocity(self, vels: list, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         self.write_to_4bytes_group_sync(vels, selected_IDs, self.groupSyncWriteVelocity)
         self.send_group_sync(self.groupSyncWriteVelocity)
 
-    def write_current(self, currents: list, ID = None):
+    def write_current(self, currents: list, ID=None):
         selected_IDs = self.fetch_and_check_ID(ID)
         self.write_to_2bytes_group_sync(currents, selected_IDs, self.groupSyncWriteCurrent)
         self.send_group_sync(self.groupSyncWriteCurrent)
