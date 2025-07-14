@@ -1,6 +1,16 @@
 import sys
 from dynamixel_sdk import *
 from .dynamixel_address_book import *
+import ctypes
+
+
+def uint16_to_int16(value):
+    """Convert unsigned 16-bit to signed 16-bit"""
+    return ctypes.c_int16(value).value
+
+def uint32_to_int32(value):
+    """Convert unsigned 32-bit to signed 32-bit"""
+    return ctypes.c_int32(value).value
 
 
 class Dynamixel:
@@ -229,7 +239,10 @@ class Dynamixel:
         vals = []
         for id in ids:
             if group_sync.isAvailable(id, address, len):
-                vals.append(group_sync.getData(id, address, len))
+                if len == 2:
+                    vals.append(uint16_to_int16(group_sync.getData(id, address, len)))
+                elif len == 4:
+                    vals.append(uint32_to_int32(group_sync.getData(id, address, len)))
         return vals
 
     def read_position(self, ID=None):
