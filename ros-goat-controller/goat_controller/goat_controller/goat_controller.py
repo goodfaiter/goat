@@ -71,8 +71,8 @@ class GoatController(Node):
 
         self.servo.write_velocity(vels, ids)
 
-        left_wheel_velocity = left_wheel_dynamixel_velocity * 0.226
-        right_wheel_velocity = right_wheel_dynamixel_velocity * 0.226
+        left_wheel_velocity = left_wheel_dynamixel_velocity * 0.229
+        right_wheel_velocity = right_wheel_dynamixel_velocity * 0.229
 
         # Publish commanded velocity
         commanded_velocity_msg = Float32MultiArray()
@@ -91,10 +91,10 @@ class GoatController(Node):
         ids = [self.ID_FRONT_LEFT, self.ID_BACK_LEFT, self.ID_FRONT_RIGHT, self.ID_BACK_RIGHT]
         wheel_velocity = self.servo.read_velocity(ids)
         if wheel_velocity:
-            wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.226
-            wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.226
-            wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.226
-            wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.226
+            wheel_velocity[0] *= self.DIR_FRONT_LEFT * 0.229
+            wheel_velocity[1] *= self.DIR_BACK_LEFT * 0.229
+            wheel_velocity[2] *= self.DIR_FRONT_RIGHT * 0.229
+            wheel_velocity[3] *= self.DIR_BACK_RIGHT * 0.229
         else:
             wheel_velocity = []
 

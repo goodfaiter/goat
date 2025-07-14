@@ -90,14 +90,7 @@ class Dynamixel:
             print("!! Failed to set baudrate for:", self.descriptive_device_name)
             sys.exit()
 
-    def end_communication(self, disable_torque = True):
-        if disable_torque:
-            if self.multiple_motors:
-                for ID in self.ID:
-                    self.disable_torque(ID = ID)
-            else:
-                self.disable_torque()
-
+    def end_communication(self):
         # Close port
         try: 
             self.port_handler.closePort()
@@ -150,31 +143,25 @@ class Dynamixel:
     def set_current_limit(self, max_current_ma, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
-
-            # Limit max current according to the model
-            # series = self.series_name[selected_ID]
-            # if series == "xl":
-            #     max_current_ma = max(0, min(1000, max_current_ma))
-            # else:
-            #     max_current_ma = max(0, min(1000, max_current_ma))
-
-            # Transform to int range with one increment being 2.69 mA. 1193 is max range
-            int_max_current_ma = min(648, int(max_current_ma/2.69))
-
+            int_max_current_ma = min(1193, int(max_current_ma/2.69)) # one increment being 2.69 mA. 1193 is max range
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_CURRENT_LIMIT, int_max_current_ma)
 
     def set_velocity_pid(self, p: int, i: int, d: int, ID = None):
         selected_IDs = self.fetch_and_check_ID(ID)
         for selected_ID in selected_IDs:
-            self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 0)
+
+            was_torque_on = False
+            if self.is_torque_on(print_only_if_error = True, ID = selected_ID):
+                was_torque_on = True
+                self.disable_torque(print_only_if_error = True, ID = selected_ID)
 
             # Write gains (2-byte writes)
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_VELOCITY_P_GAIN, p)
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_VELOCITY_I_GAIN, i)
             self.packet_handler.write2ByteTxRx(self.port_handler, selected_ID, ADDR_VELOCITY_D_GAIN, d)
 
-            # Re-enable torque
-            self.packet_handler.write1ByteTxRx(self.port_handler, selected_ID, ADDR_TORQUE_ENABLE, 1)
+            if was_torque_on:
+                self.enable_torque(print_only_if_error=True, ID = selected_ID)
 
     def set_operating_mode(self, mode, ID = None, print_only_if_error = False):
         selected_IDs = self.fetch_and_check_ID(ID)
@@ -202,17 +189,6 @@ class Dynamixel:
                     self.enable_torque(print_only_if_error=True, ID = selected_ID)
             else:
                 print("Enter valid operating mode. Select one of:\n" + str(list(operating_modes.keys())))
-     
-    def compensate_twos_complement(self, value, quantity):
-        if quantity in max_register_value:
-            max_value = max_register_value[quantity]
-
-            if value < max_value/2:
-                return value
-            else:
-                return value - max_value
-        else:
-            print("Enter valid operating mode. Select one of:\n" + str(list(max_register_value.keys())))
     
     def receive_group_sync(self, group_sync: GroupSyncRead) -> None:
         dxl_comm_result = group_sync.txRxPacket()
@@ -241,6 +217,7 @@ class Dynamixel:
             self.groupSyncReadVelocity.addParam(id)
         self.receive_group_sync(self.groupSyncReadVelocity)
         vel =  self.read_from_group_sync(selected_IDs, self.groupSyncReadVelocity, ADDR_PRESENT_VELOCITY, LEN_VELOCITY)
+        self.groupSyncReadVelocity.clearParam()
         return vel
 
     def read_current(self, ID = None):
@@ -249,6 +226,7 @@ class Dynamixel:
             self.groupSyncReadCurrent.addParam(id)
         self.receive_group_sync(self.groupSyncReadCurrent)
         cur =  self.read_from_group_sync(selected_IDs, self.groupSyncReadCurrent, ADDR_PRESENT_CURRENT, LEN_CURRENT)
+        self.groupSyncReadCurrent.clearParam()
         return cur
         
     def get_errors(self, ID = None):
