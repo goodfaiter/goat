@@ -12,8 +12,10 @@ class GoatController(Node):
     # Constants
     DYNAMIXEL_VELOCITY_SCALE = 310  # Converts m/s to Dynamixel units
     WHEEL_VELOCITY_SCALE = 71  # Converts m/s to rad/s
-    CURRENT_SCALE = 2.69e-3  # Converts Dynamixel units [int] to [A]
-    WHEEL_RADIUS = 0.229  # Converts Dynamixel units [int] to [rev/min]
+    DYNA_TO_AMP = 2.69e-3  # Converts Dynamixel units [int] to [A]
+    DYNA_TO_REV_PER_MIN = 0.229  # Converts Dynamixel units [int] to [rev/min]
+    WHEEL_RADIUS = 0.171 # Wheel radius [m]
+    ROVER_WIDTH = 0.36 # Rover width [m]
 
     # Motor IDs and Directions
     ID_FRONT_LEFT = 11
@@ -110,15 +112,17 @@ class GoatController(Node):
         self.get_logger().info(f"Subscribed to {self.joystick_topic}")
 
     def _compute_wheel_velocities(self, linear: float, angular: float) -> tuple[float, float]:
-        """Convert linear and angular velocity to left/right wheel velocities"""
-        left = linear - angular
-        right = linear + angular
+        """Convert linear [m/s] and angular velocity [rad/s] to left/right wheel velocities [rev/min]"""
+        linear_rev_per_min = linear / (2.0 * np.pi * self.WHEEL_RADIUS) * 60
+        angular_rev_per_min = angular * 0.5 * self.ROVER_WIDTH / (2.0 * np.pi * self.WHEEL_RADIUS) * 60
+        left = linear_rev_per_min - angular_rev_per_min
+        right = linear_rev_per_min + angular_rev_per_min
         return left, right
 
     def send_wheel_velocity(self, left: float, right: float):
         """Send velocity commands to Dynamixel motors"""
-        left_wheel_dynamixel_velocity = int(left * self.DYNAMIXEL_VELOCITY_SCALE)
-        right_wheel_dynamixel_velocity = int(right * self.DYNAMIXEL_VELOCITY_SCALE)
+        left_wheel_dynamixel_velocity = int(left / self.DYNA_TO_REV_PER_MIN)
+        right_wheel_dynamixel_velocity = int(right / self.DYNA_TO_REV_PER_MIN)
 
         vels = [
             self.DIR_FRONT_LEFT * left_wheel_dynamixel_velocity,
@@ -131,7 +135,7 @@ class GoatController(Node):
     def publish_wheel_velocity(self, left: float, right: float):
         """Publish commanded wheel velocities"""
         commanded_velocity_msg = Float32MultiArray()
-        commanded_velocity_msg.data = [left * self.WHEEL_VELOCITY_SCALE, right * self.WHEEL_VELOCITY_SCALE]
+        commanded_velocity_msg.data = [left, right]
         self.commanded_velocity_publisher.publish(commanded_velocity_msg)
 
     def joystick_callback(self, msg: Joy):
@@ -140,8 +144,8 @@ class GoatController(Node):
 
         if abs(msg.axes[1]) > 0.1 or abs(msg.axes[0]) > 0.1:
             # Direct control mode
-            linear = self.linear_scale * msg.axes[1]
-            angular = self.angular_scale * msg.axes[0]
+            linear = self.linear_scale * msg.axes[1] # [m/s]
+            angular = self.angular_scale * msg.axes[0] # [m/s]
             left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
         elif abs(msg.axes[3]) > 0.1 or abs(msg.axes[2]) > 0.1:
             # PID control mode
@@ -191,10 +195,10 @@ class GoatController(Node):
 
         # Apply direction and scaling
         wheel_velocity = [
-            wheel_velocity[0] * self.DIR_FRONT_LEFT * self.WHEEL_RADIUS,
-            wheel_velocity[1] * self.DIR_FRONT_RIGHT * self.WHEEL_RADIUS,
-            wheel_velocity[2] * self.DIR_BACK_LEFT * self.WHEEL_RADIUS,
-            wheel_velocity[3] * self.DIR_BACK_RIGHT * self.WHEEL_RADIUS,
+            wheel_velocity[0] * self.DIR_FRONT_LEFT * self.DYNA_TO_REV_PER_MIN,
+            wheel_velocity[1] * self.DIR_FRONT_RIGHT * self.DYNA_TO_REV_PER_MIN,
+            wheel_velocity[2] * self.DIR_BACK_LEFT * self.DYNA_TO_REV_PER_MIN,
+            wheel_velocity[3] * self.DIR_BACK_RIGHT * self.DYNA_TO_REV_PER_MIN,
         ]
 
         # Publish measured velocity
@@ -205,7 +209,7 @@ class GoatController(Node):
         # Read and publish current consumption
         wheel_current = self.servo.read_current("all")
         if wheel_current:
-            wheel_current = [curr * self.CURRENT_SCALE for curr in wheel_current]
+            wheel_current = [curr * self.DYNA_TO_AMP for curr in wheel_current]
             current_msg = Float32MultiArray()
             current_msg.data = wheel_current
             self.current_consumption_publisher.publish(current_msg)
