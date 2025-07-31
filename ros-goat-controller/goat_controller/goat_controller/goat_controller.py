@@ -1,7 +1,6 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray
 import numpy as np
 
@@ -10,8 +9,6 @@ from .dynamixel_controller import Dynamixel
 
 class GoatController(Node):
     # Constants
-    DYNAMIXEL_VELOCITY_SCALE = 310  # Converts m/s to Dynamixel units
-    WHEEL_VELOCITY_SCALE = 71  # Converts m/s to rad/s
     DYNA_TO_AMP = 2.69e-3  # Converts Dynamixel units [int] to [A]
     DYNA_TO_REV_PER_MIN = 0.229  # Converts Dynamixel units [int] to [rev/min]
     WHEEL_RADIUS = 0.171 # Wheel radius [m]
