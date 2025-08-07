@@ -145,12 +145,13 @@ class GoatController(Node):
     def joystick_callback(self, msg: Joy):
         """Handle joystick input and compute wheel velocities"""
         left_wheel_velocity = right_wheel_velocity = 0.0
+        desired_linear = desired_angular = 0.0
 
         if abs(msg.axes[1]) > 0.1 or abs(msg.axes[0]) > 0.1:
             # Direct control mode
-            linear = self.linear_scale * msg.axes[1]  # [m/s]
-            angular = self.angular_scale * msg.axes[0]  # [m/s]
-            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
+            desired_linear = self.linear_scale * msg.axes[1]  # [m/s]
+            desired_angular = self.angular_scale * msg.axes[0]  # [m/s]
+            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(desired_linear, desired_angular)
         elif abs(msg.axes[4]) > 0.1 or abs(msg.axes[3]) > 0.1:
             # PID control mode
             desired_linear = self.linear_scale * msg.axes[4]
