@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
-from geometry.msg import Twist
+from geometry_msgs.msg  import Twist
 from std_msgs.msg import Float32MultiArray
 import numpy as np
 
@@ -138,6 +138,10 @@ class GoatController(Node):
         commanded_velocity_msg.data = [left, right]
         self.commanded_velocity_publisher.publish(commanded_velocity_msg)
 
+    def publish_desired_twist(self, twist_msg: Twist):
+        """Publish desired base velocities"""
+        self.desired_twist_publisher.publish(twist_msg)
+
     def joystick_callback(self, msg: Joy):
         """Handle joystick input and compute wheel velocities"""
         left_wheel_velocity = right_wheel_velocity = 0.0
@@ -163,6 +167,7 @@ class GoatController(Node):
         desired_twist = Twist()
         desired_twist.linear.x = desired_linear
         desired_twist.angular.z = desired_angular
+        self.publish_desired_twist(desired_twist)
         self.send_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
         self.publish_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
 
