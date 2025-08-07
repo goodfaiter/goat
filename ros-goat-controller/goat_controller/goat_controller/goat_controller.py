@@ -76,7 +76,7 @@ class GoatController(Node):
 
         # Scaling factors
         self.linear_scale = self.declare_parameter("linear_scale", 0.5).get_parameter_value().double_value
-        self.angular_scale = self.declare_parameter("angular_scale", 0.5).get_parameter_value().double_value
+        self.angular_scale = self.declare_parameter("angular_scale", np.pi).get_parameter_value().double_value
 
     def _setup_communication(self):
         """Initialize communication with Dynamixel servos"""
@@ -144,10 +144,10 @@ class GoatController(Node):
             linear = self.linear_scale * msg.axes[1] # [m/s]
             angular = self.angular_scale * msg.axes[0] # [m/s]
             left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
-        elif abs(msg.axes[3]) > 0.1 or abs(msg.axes[2]) > 0.1:
+        elif abs(msg.axes[4]) > 0.1 or abs(msg.axes[3]) > 0.1:
             # PID control mode
-            desired_linear = self.linear_scale * msg.axes[3]
-            desired_angular = self.angular_scale * msg.axes[2]
+            desired_linear = self.linear_scale * msg.axes[4]
+            desired_angular = self.angular_scale * msg.axes[3]
 
             linear_error = desired_linear - self.linear_velocity[0]
             angular_error = desired_angular - self.angular_velocity[0]
