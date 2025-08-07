@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from geometry.msg import Twist
 from std_msgs.msg import Float32MultiArray
 import numpy as np
 
@@ -11,8 +12,8 @@ class GoatController(Node):
     # Constants
     DYNA_TO_AMP = 2.69e-3  # Converts Dynamixel units [int] to [A]
     DYNA_TO_REV_PER_MIN = 0.229  # Converts Dynamixel units [int] to [rev/min]
-    WHEEL_RADIUS = 0.171 # Wheel radius [m]
-    ROVER_WIDTH = 0.36 # Rover width [m]
+    WHEEL_RADIUS = 0.171  # Wheel radius [m]
+    ROVER_WIDTH = 0.36  # Rover width [m]
 
     # Motor IDs and Directions
     ID_FRONT_LEFT = 11
@@ -51,8 +52,8 @@ class GoatController(Node):
     def _declare_parameters(self):
         """Declare and get all ROS parameters"""
         # Control gains
-        self.linear_p = self.declare_parameter("linear_p", 1.0).get_parameter_value().double_value
-        self.linear_d = self.declare_parameter("linear_d", 0.1).get_parameter_value().double_value
+        self.linear_p = self.declare_parameter("linear_p", 0.0).get_parameter_value().double_value
+        self.linear_d = self.declare_parameter("linear_d", 0.0).get_parameter_value().double_value
         self.linear_alpha = self.declare_parameter("linear_alpha", 0.9).get_parameter_value().double_value
         self.angular_p = self.declare_parameter("angular_p", 1.0).get_parameter_value().double_value
         self.angular_d = self.declare_parameter("angular_d", 0.1).get_parameter_value().double_value
@@ -73,6 +74,7 @@ class GoatController(Node):
         self.angular_velocity_topic = (
             self.declare_parameter("angular_velocity_topic", "/angular_velocity").get_parameter_value().string_value
         )
+        self.desired_twist_topic = self.declare_parameter("desired_twist", "/desired_twist").get_parameter_value().string_value
 
         # Scaling factors
         self.linear_scale = self.declare_parameter("linear_scale", 0.5).get_parameter_value().double_value
@@ -99,6 +101,7 @@ class GoatController(Node):
         self.commanded_velocity_publisher = self.create_publisher(Float32MultiArray, self.commanded_velocity_topic, 10)
         self.measured_velocity_publisher = self.create_publisher(Float32MultiArray, self.measured_velocity_topic, 10)
         self.current_consumption_publisher = self.create_publisher(Float32MultiArray, self.current_consumption_topic, 10)
+        self.desired_twist_publisher = self.create_publisher(Twist, self.desired_twist_topic, 10)
         self.linear_velocity_subscription = self.create_subscription(
             Float32MultiArray, self.linear_velocity_topic, self.linear_velocity_callback, 10
         )
@@ -141,8 +144,8 @@ class GoatController(Node):
 
         if abs(msg.axes[1]) > 0.1 or abs(msg.axes[0]) > 0.1:
             # Direct control mode
-            linear = self.linear_scale * msg.axes[1] # [m/s]
-            angular = self.angular_scale * msg.axes[0] # [m/s]
+            linear = self.linear_scale * msg.axes[1]  # [m/s]
+            angular = self.angular_scale * msg.axes[0]  # [m/s]
             left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
         elif abs(msg.axes[4]) > 0.1 or abs(msg.axes[3]) > 0.1:
             # PID control mode
@@ -157,6 +160,9 @@ class GoatController(Node):
 
             left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
 
+        desired_twist = Twist()
+        desired_twist.linear.x = desired_linear
+        desired_twist.angular.z = desired_angular
         self.send_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
         self.publish_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
 
