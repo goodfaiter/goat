@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg  import Twist
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32, Float32MultiArray
 import numpy as np
 
 from .dynamixel_controller import Dynamixel
@@ -13,7 +13,6 @@ class GoatController(Node):
     DYNA_TO_AMP = 2.69e-3  # Converts Dynamixel units [int] to [A]
     DYNA_TO_REV_PER_MIN = 0.229  # Converts Dynamixel units [int] to [rev/min]
     WHEEL_RADIUS = 0.171  # Wheel radius [m]
-    ROVER_WIDTH = 0.36  # Rover width [m]
 
     # Motor IDs and Directions
     ID_FRONT_LEFT = 11
@@ -39,6 +38,7 @@ class GoatController(Node):
         self.angular_velocity: np.ndarray = np.zeros(3)
         self.angular_velocity_smooth: np.ndarray = np.zeros(3)
         self.angular_acceleration: np.ndarray = np.zeros(3)
+        self.frame_points: np.ndarray = np.zeros(12 * 3)
 
         # Parameters
         self._declare_parameters()
@@ -51,6 +51,9 @@ class GoatController(Node):
 
     def _declare_parameters(self):
         """Declare and get all ROS parameters"""
+        # Default control parameters
+        self._frame_width = self.declare_parameter("frame_width", 0.36).get_parameter_value().double_value
+
         # Control gains
         self.linear_p = self.declare_parameter("linear_p", 0.0).get_parameter_value().double_value
         self.linear_d = self.declare_parameter("linear_d", 0.0).get_parameter_value().double_value
@@ -75,10 +78,12 @@ class GoatController(Node):
             self.declare_parameter("angular_velocity_topic", "/angular_velocity").get_parameter_value().string_value
         )
         self.desired_twist_topic = self.declare_parameter("desired_twist", "/desired_twist").get_parameter_value().string_value
+        self.estimated_width_topic = self.declare_parameter("estimated_width", "/estimated_width").get_parameter_value().string_value
+        self.frame_points_topic = self.declare_parameter("frame_points_topic", "/frame_points").get_parameter_value().string_value
 
         # Scaling factors
-        self.linear_scale = self.declare_parameter("linear_scale", 0.5).get_parameter_value().double_value
-        self.angular_scale = self.declare_parameter("angular_scale", np.pi).get_parameter_value().double_value
+        self.linear_scale = self.declare_parameter("linear_scale", 0.4).get_parameter_value().double_value
+        self.angular_scale = self.declare_parameter("angular_scale", 1.0).get_parameter_value().double_value
 
     def _setup_communication(self):
         """Initialize communication with Dynamixel servos"""
@@ -102,11 +107,15 @@ class GoatController(Node):
         self.measured_velocity_publisher = self.create_publisher(Float32MultiArray, self.measured_velocity_topic, 10)
         self.current_consumption_publisher = self.create_publisher(Float32MultiArray, self.current_consumption_topic, 10)
         self.desired_twist_publisher = self.create_publisher(Twist, self.desired_twist_topic, 10)
+        self.estimated_width_publisher = self.create_publisher(Float32, self.estimated_width_topic, 10)
         self.linear_velocity_subscription = self.create_subscription(
             Float32MultiArray, self.linear_velocity_topic, self.linear_velocity_callback, 10
         )
         self.angular_velocity_subscription = self.create_subscription(
             Float32MultiArray, self.angular_velocity_topic, self.angular_velocity_callback, 10
+        )
+        self.frme_points_subscription = self.create_subscription(
+            Float32MultiArray, self.frame_points_topic, self.frame_points_callback, 10
         )
 
         self.get_logger().info(f"Subscribed to {self.joystick_topic}")
@@ -114,7 +123,7 @@ class GoatController(Node):
     def _compute_wheel_velocities(self, linear: float, angular: float) -> tuple[float, float]:
         """Convert linear [m/s] and angular velocity [rad/s] to left/right wheel velocities [rev/min]"""
         linear_rev_per_min = linear / (2.0 * np.pi * self.WHEEL_RADIUS) * 60
-        angular_rev_per_min = angular * 0.5 * self.ROVER_WIDTH / (2.0 * np.pi * self.WHEEL_RADIUS) * 60
+        angular_rev_per_min = angular * 0.5 * self._frame_width / (2.0 * np.pi * self.WHEEL_RADIUS) * 60
         left = linear_rev_per_min - angular_rev_per_min
         right = linear_rev_per_min + angular_rev_per_min
         return left, right
@@ -187,6 +196,15 @@ class GoatController(Node):
             1.0 - self.angular_alpha
         )
         self.angular_acceleration = (self.angular_velocity_smooth - old_smooth) / self.timer_period
+
+    def frame_points_callback(self, msg: Float32MultiArray):
+        """Update GOAT frame point vector and frame width for angular velocity calculations"""
+        self.frame_points = np.array(msg.data).reshape(3, 12)
+        avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :] - self.frame_points[[5, 7, 10, 11], :], axis=1)
+        self._frame_width = np.linalg.norm(avg_distance)
+        estimated_width = Float32()
+        estimated_width.data = self._frame_width
+        self.estimated_width_publisher.publish(estimated_width)
 
     def _state_callback(self):
         """Timer callback for reading and publishing motor states"""
