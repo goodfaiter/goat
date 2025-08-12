@@ -199,7 +199,7 @@ class GoatController(Node):
 
     def frame_points_callback(self, msg: Float32MultiArray):
         """Update GOAT frame point vector and frame width for angular velocity calculations"""
-        self.frame_points = np.array(msg.data).reshape(3, 12)
+        self.frame_points = np.array(msg.data).reshape(12, 3)
         avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :] - self.frame_points[[5, 7, 10, 11], :], axis=1)
         self._frame_width = np.linalg.norm(avg_distance)
         estimated_width = Float32()
