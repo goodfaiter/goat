@@ -32,7 +32,7 @@ class GoatController(Node):
         self.check_error = False
 
         # State variables
-        self._frame_width: float = 0.36
+        self._frame_width: float = 0.50
         self.linear_velocity: np.ndarray = np.zeros(3)
         self.linear_velocity_smooth: np.ndarray = np.zeros(3)
         self.linear_acceleration: np.ndarray = np.zeros(3)
@@ -53,7 +53,7 @@ class GoatController(Node):
     def _declare_parameters(self):
         """Declare and get all ROS parameters"""
         # Default control parameters
-        self._frame_width = self.declare_parameter("frame_width", 0.36).get_parameter_value().double_value
+        self._frame_width = self.declare_parameter("frame_width", 0.50).get_parameter_value().double_value
 
         # Control gains
         self.linear_p = self.declare_parameter("linear_p", 0.0).get_parameter_value().double_value
@@ -202,7 +202,7 @@ class GoatController(Node):
         """Update GOAT frame point vector and frame width for angular velocity calculations"""
         self.frame_points = np.array(msg.data).reshape(12, 3)
         avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :] - self.frame_points[[5, 7, 10, 11], :], axis=1)
-        self._frame_width = np.linalg.norm(avg_distance)
+        self._frame_width = np.linalg.norm(avg_distance) - 0.1 # 0.1 comes from the 5 [cm] x 2 marker to wheel offset
         estimated_width = Float32()
         estimated_width.data = float(self._frame_width)
         self.estimated_width_publisher.publish(estimated_width)
