@@ -32,6 +32,7 @@ class GoatController(Node):
         self.check_error = False
 
         # State variables
+        self._frame_width: float = 0.36
         self.linear_velocity: np.ndarray = np.zeros(3)
         self.linear_velocity_smooth: np.ndarray = np.zeros(3)
         self.linear_acceleration: np.ndarray = np.zeros(3)
@@ -203,7 +204,7 @@ class GoatController(Node):
         avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :] - self.frame_points[[5, 7, 10, 11], :], axis=1)
         self._frame_width = np.linalg.norm(avg_distance)
         estimated_width = Float32()
-        estimated_width.data = self._frame_width
+        estimated_width.data = float(self._frame_width)
         self.estimated_width_publisher.publish(estimated_width)
 
     def _state_callback(self):
