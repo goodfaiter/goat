@@ -43,6 +43,14 @@ class GoatController(Node):
         self.pid_mode: bool = False
         self.desired_linear: float = 0.0
         self.desired_angular: float = 0.0
+        self.old_linear_error: float = 0.0
+        self.error_linear_d: float = 0.0
+        self.error_angular_integral: float = 0.0
+        self.old_angular_error: float = 0.0
+        self.error_angular_d: float = 0.0
+        self.pid_mode: bool = False
+        self.desired_linear: float = 0.0
+        self.desired_angular: float = 0.0
         self.linear_velocity: np.ndarray = np.zeros(3)
         self.linear_velocity_smooth: np.ndarray = np.zeros(3)
         self.linear_acceleration: np.ndarray = np.zeros(3)
@@ -60,6 +68,7 @@ class GoatController(Node):
         self.timer_period = 0.05  # 20Hz
         self.state_timer = self.create_timer(self.timer_period, self._state_callback)
         self.motor_timer = self.create_timer(self.timer_period, self._motor_callback)
+        self.motor_timer = self.create_timer(self.timer_period, self._motor_callback)
 
     def _declare_parameters(self):
         """Declare and get all ROS parameters"""
@@ -70,6 +79,8 @@ class GoatController(Node):
         self.linear_p = self.declare_parameter("linear_p", 0.0).get_parameter_value().double_value
         self.linear_d = self.declare_parameter("linear_d", 0.0).get_parameter_value().double_value
         self.linear_alpha = self.declare_parameter("linear_alpha", 0.9).get_parameter_value().double_value
+        self.angular_p = self.declare_parameter("angular_p", 1.1).get_parameter_value().double_value
+        self.angular_i = self.declare_parameter("angular_i", 0.05).get_parameter_value().double_value
         self.angular_p = self.declare_parameter("angular_p", 1.1).get_parameter_value().double_value
         self.angular_i = self.declare_parameter("angular_i", 0.05).get_parameter_value().double_value
         self.angular_d = self.declare_parameter("angular_d", 0.1).get_parameter_value().double_value
@@ -86,6 +97,7 @@ class GoatController(Node):
         self.current_consumption_topic = (
             self.declare_parameter("current_consumption_topic", "/current_consumption").get_parameter_value().string_value
         )
+        self.estimated_twist_topic = self.declare_parameter("estimated_twist_topic", "/estimated_twist").get_parameter_value().string_value
         self.estimated_twist_topic = self.declare_parameter("estimated_twist_topic", "/estimated_twist").get_parameter_value().string_value
         self.desired_twist_topic = self.declare_parameter("desired_twist", "/desired_twist").get_parameter_value().string_value
         self.estimated_width_topic = self.declare_parameter("estimated_width", "/estimated_width").get_parameter_value().string_value
@@ -120,6 +132,7 @@ class GoatController(Node):
         self.current_consumption_publisher = self.create_publisher(Float32MultiArray, self.current_consumption_topic, 10)
         self.desired_twist_publisher = self.create_publisher(Twist, self.desired_twist_topic, 10)
         self.estimated_width_publisher = self.create_publisher(Float32, self.estimated_width_topic, 10)
+        self.estimated_twist_subscription = self.create_subscription(Twist, self.estimated_twist_topic, self.estimated_twist_callback, 10)
         self.estimated_twist_subscription = self.create_subscription(Twist, self.estimated_twist_topic, self.estimated_twist_callback, 10)
         self.frme_points_subscription = self.create_subscription(
             Float32MultiArray, self.frame_points_topic, self.frame_points_callback, 10
@@ -162,9 +175,13 @@ class GoatController(Node):
         """Handle joystick input and compute wheel velocities"""
         self.desired_linear = self.desired_angular = 0.0
         self.pid_mode = False
+        self.desired_linear = self.desired_angular = 0.0
+        self.pid_mode = False
 
         if abs(msg.axes[1]) > 0.1 or abs(msg.axes[0]) > 0.1:
             # Direct control mode
+            self.desired_linear = self.linear_scale * msg.axes[1]  # [m/s]
+            self.desired_angular = self.angular_scale * msg.axes[0]  # [m/s]
             self.desired_linear = self.linear_scale * msg.axes[1]  # [m/s]
             self.desired_angular = self.angular_scale * msg.axes[0]  # [m/s]
         elif abs(msg.axes[4]) > 0.1 or abs(msg.axes[3]) > 0.1:
@@ -172,8 +189,14 @@ class GoatController(Node):
             self.pid_mode = True
             self.desired_linear = self.linear_scale * msg.axes[4]  # [m/s]
             self.desired_angular = self.angular_scale * msg.axes[3]  # [m/s]
+            #Pid mode
+            self.pid_mode = True
+            self.desired_linear = self.linear_scale * msg.axes[4]  # [m/s]
+            self.desired_angular = self.angular_scale * msg.axes[3]  # [m/s]
 
         desired_twist = Twist()
+        desired_twist.linear.x = self.desired_linear
+        desired_twist.angular.z = self.desired_angular
         desired_twist.linear.x = self.desired_linear
         desired_twist.angular.z = self.desired_angular
         self.publish_desired_twist(desired_twist)
@@ -188,9 +211,20 @@ class GoatController(Node):
         self.angular_velocity[1] = msg.angular.y
         self.angular_velocity[2] = msg.angular.z
 
+    def estimated_twist_callback(self, msg: Twist):
+        """Update estimated twist"""
+        self.linear_velocity[0] = msg.linear.x
+        self.linear_velocity[1] = msg.linear.y
+        self.linear_velocity[2] = msg.linear.z
+
+        self.angular_velocity[0] = msg.angular.x
+        self.angular_velocity[1] = msg.angular.y
+        self.angular_velocity[2] = msg.angular.z
+
     def frame_points_callback(self, msg: Float32MultiArray):
         """Update GOAT frame point vector and frame width for angular velocity calculations"""
         self.frame_points = np.array(msg.data).reshape(12, 3)
+        avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :], axis=0) - np.mean(self.frame_points[[5, 7, 10, 11], :], axis=0)
         avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :], axis=0) - np.mean(self.frame_points[[5, 7, 10, 11], :], axis=0)
         self._frame_width = np.linalg.norm(avg_distance) - 0.1 # 0.1 comes from the 5 [cm] x 2 marker to wheel offset
         estimated_width = Float32()
