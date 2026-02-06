@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   nginx:
     image: docker.io/library/nginx
@@ -7,7 +5,7 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ~/bags:/bags
     network_mode: "host"
-    restart: always
+    restart: unless-stopped
 
   rosblox-studio:
     image: ghcr.io/rosblox/studio:latest
@@ -15,11 +13,11 @@ services:
       - ./studio/layout.json:/src/layout.json
     ports:
       - 8080:8080
-    restart: always
+    restart: unless-stopped
 
   ros-foxglove-bridge:
     image: ghcr.io/rosblox/ros-foxglove-bridge:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -30,7 +28,7 @@ services:
 
   ros-joy-linux:
     image: ghcr.io/rosblox/ros-joy-linux:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -42,25 +40,25 @@ services:
       - ROS_DOMAIN_ID
     command: su - ros --whitelist-environment="ROS_DOMAIN_ID" /run.sh
 
-  rtklib:
-    image: ghcr.io/rosblox/rtklib:latest
-    restart: always
-    command: str2str -in ntrip://$NTRIP_USER:$NTRIP_PASSWORD@www.swipos.ch:2101/MSM_GISGEO_LV95LHN95 -b 1 -out tcpcli://192.168.60.1:6666
+  # rtklib:
+  #   image: ghcr.io/rosblox/rtklib:latest
+  #   restart: unless-stopped
+  #   command: str2str -in ntrip://$NTRIP_USER:$NTRIP_PASSWORD@www.swipos.ch:2101/MSM_GISGEO_LV95LHN95 -b 1 -out tcpcli://192.168.60.1:6666
 
-  ros-septentrio-gnss-driver:
-    image: ghcr.io/rosblox/ros-septentrio-gnss-driver:humble
-    restart: always
-    network_mode: "host"
-    ipc: host
-    pid: host
-    environment:
-      - UID=${HOST_UID}
-      - ROS_DOMAIN_ID
-    command: su - ros --whitelist-environment="ROS_DOMAIN_ID" /run.sh
+  # ros-septentrio-gnss-driver:
+  #   image: ghcr.io/rosblox/ros-septentrio-gnss-driver:humble
+  #   restart: unless-stopped
+  #   network_mode: "host"
+  #   ipc: host
+  #   pid: host
+  #   environment:
+  #     - UID=${HOST_UID}
+  #     - ROS_DOMAIN_ID
+  #   command: su - ros --whitelist-environment="ROS_DOMAIN_ID" /run.sh
 
   ros-goat-controller:
     image: ghcr.io/rosblox/ros-goat-controller:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -74,7 +72,7 @@ services:
 
   ros-bag-recorder:
     image: ghcr.io/rosblox/ros-bag-recorder:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -89,7 +87,7 @@ services:
 
   ros-ina220:
     image: ghcr.io/rosblox/ros-ina220:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -102,7 +100,7 @@ services:
 
   ros-winch-control:
     image: ghcr.io/rosblox/ros-winch-control:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -115,7 +113,7 @@ services:
 
   ros-imu-tools:
     image: ghcr.io/rosblox/ros-imu-tools:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -131,7 +129,7 @@ services:
  
   ros-lsm6dsox-lis3mdl:
     image: ghcr.io/rosblox/ros-lsm6dsox-lis3mdl:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -145,7 +143,7 @@ services:
 
   ros-as5048b_1:
     image: ghcr.io/rosblox/ros-as5048b:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -160,7 +158,7 @@ services:
 
   ros-as5048b_2:
     image: ghcr.io/rosblox/ros-as5048b:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -175,7 +173,7 @@ services:
 
   ros-pca9685-ros2-control:
     image: ghcr.io/rosblox/ros-pca9685-ros2-control:humble
-    restart: always
+    restart: unless-stopped
     network_mode: "host"
     ipc: host
     pid: host
@@ -186,15 +184,9 @@ services:
       - /dev/i2c-1:/dev/i2c-1
     command: su - ros --whitelist-environment="ROS_DOMAIN_ID" /run.sh
 
-
-
-
-
-
-
   # ros-cpu-temperature:
   #   image: ghcr.io/rosblox/ros-cpu-temperature:humble
-  #   restart: always
+  #   restart: unless-stopped
   #   network_mode: "host"
   #   command: ros2 run ros_cpu_temperature ros_cpu_temperature_publisher
   #   environment:
@@ -202,7 +194,7 @@ services:
 
   # ros-robot-localization:
   #   image: ghcr.io/rosblox/ros-robot-localization:humble
-  #   restart: always
+  #   restart: unless-stopped
   #   network_mode: "host"
   #   volumes:
   #     - ./robot_localization/ukf.yaml:/opt/ros/humble/share/robot_localization/params/ukf.yaml
@@ -219,7 +211,7 @@ services:
   #      - ./nav2_bringup/goat_world.yaml:/opt/ros/humble/share/nav2_bringup/maps/goat_world.yaml
   #      - ./nav2_bringup/goat_world_empty.pgm:/opt/ros/humble/share/nav2_bringup/maps/goat_world_empty.pgm
   #      - ./nav2_bringup/navigate_to_pose_w_replanning_rolling_and_recovery.xml:/opt/ros/humble/share/nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
-  #    restart: always
+  #    restart: unless-stopped
   #    network_mode: "host"
   #    command: ros2 launch nav2_bringup nav2_bringup_launch.py
   #    environment:

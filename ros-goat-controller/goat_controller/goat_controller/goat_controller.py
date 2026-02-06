@@ -23,16 +23,26 @@ class GoatController(Node):
     DIR_FRONT_LEFT = -1
     DIR_FRONT_RIGHT = 1
     DIR_BACK_LEFT = -1
-    DIR_BACK_RIGHT = 1
+    DIR_BACK_RIGHT = -1
 
     def __init__(self):
         super().__init__("goat_controller")
+
+        self.get_logger().info("Initializing GOAT Controller Node")
 
         # Configuration flags
         self.check_error = False
 
         # State variables
         self._frame_width: float = 0.50
+        self.old_linear_error: float = 0.0
+        self.error_linear_d: float = 0.0
+        self.error_angular_integral: float = 0.0
+        self.old_angular_error: float = 0.0
+        self.error_angular_d: float = 0.0
+        self.pid_mode: bool = False
+        self.desired_linear: float = 0.0
+        self.desired_angular: float = 0.0
         self.linear_velocity: np.ndarray = np.zeros(3)
         self.linear_velocity_smooth: np.ndarray = np.zeros(3)
         self.linear_acceleration: np.ndarray = np.zeros(3)
@@ -49,6 +59,7 @@ class GoatController(Node):
         # Timer
         self.timer_period = 0.05  # 20Hz
         self.state_timer = self.create_timer(self.timer_period, self._state_callback)
+        self.motor_timer = self.create_timer(self.timer_period, self._motor_callback)
 
     def _declare_parameters(self):
         """Declare and get all ROS parameters"""
@@ -59,7 +70,8 @@ class GoatController(Node):
         self.linear_p = self.declare_parameter("linear_p", 0.0).get_parameter_value().double_value
         self.linear_d = self.declare_parameter("linear_d", 0.0).get_parameter_value().double_value
         self.linear_alpha = self.declare_parameter("linear_alpha", 0.9).get_parameter_value().double_value
-        self.angular_p = self.declare_parameter("angular_p", 1.0).get_parameter_value().double_value
+        self.angular_p = self.declare_parameter("angular_p", 1.1).get_parameter_value().double_value
+        self.angular_i = self.declare_parameter("angular_i", 0.05).get_parameter_value().double_value
         self.angular_d = self.declare_parameter("angular_d", 0.1).get_parameter_value().double_value
         self.angular_alpha = self.declare_parameter("angular_alpha", 0.9).get_parameter_value().double_value
 
@@ -74,10 +86,7 @@ class GoatController(Node):
         self.current_consumption_topic = (
             self.declare_parameter("current_consumption_topic", "/current_consumption").get_parameter_value().string_value
         )
-        self.linear_velocity_topic = self.declare_parameter("linear_velocity_topic", "/linear_velocity").get_parameter_value().string_value
-        self.angular_velocity_topic = (
-            self.declare_parameter("angular_velocity_topic", "/angular_velocity").get_parameter_value().string_value
-        )
+        self.estimated_twist_topic = self.declare_parameter("estimated_twist_topic", "/estimated_twist").get_parameter_value().string_value
         self.desired_twist_topic = self.declare_parameter("desired_twist", "/desired_twist").get_parameter_value().string_value
         self.estimated_width_topic = self.declare_parameter("estimated_width", "/estimated_width").get_parameter_value().string_value
         self.frame_points_topic = self.declare_parameter("frame_points_topic", "/frame_points").get_parameter_value().string_value
@@ -99,6 +108,8 @@ class GoatController(Node):
         self.servo.disable_torque(False, ID="all")
         self.servo.set_current_limit(1000, ID="all")
         self.servo.set_operating_mode("velocity", ID="all")
+        self.servo.set_velocity_limit(100, ID="all")
+        self.servo.set_velocity_pi(100, 0.0, ID="all")
         self.servo.enable_torque(False, ID="all")
 
     def _setup_publishers_subscribers(self):
@@ -109,12 +120,7 @@ class GoatController(Node):
         self.current_consumption_publisher = self.create_publisher(Float32MultiArray, self.current_consumption_topic, 10)
         self.desired_twist_publisher = self.create_publisher(Twist, self.desired_twist_topic, 10)
         self.estimated_width_publisher = self.create_publisher(Float32, self.estimated_width_topic, 10)
-        self.linear_velocity_subscription = self.create_subscription(
-            Float32MultiArray, self.linear_velocity_topic, self.linear_velocity_callback, 10
-        )
-        self.angular_velocity_subscription = self.create_subscription(
-            Float32MultiArray, self.angular_velocity_topic, self.angular_velocity_callback, 10
-        )
+        self.estimated_twist_subscription = self.create_subscription(Twist, self.estimated_twist_topic, self.estimated_twist_callback, 10)
         self.frme_points_subscription = self.create_subscription(
             Float32MultiArray, self.frame_points_topic, self.frame_points_callback, 10
         )
@@ -154,58 +160,71 @@ class GoatController(Node):
 
     def joystick_callback(self, msg: Joy):
         """Handle joystick input and compute wheel velocities"""
-        left_wheel_velocity = right_wheel_velocity = 0.0
-        desired_linear = desired_angular = 0.0
+        self.desired_linear = self.desired_angular = 0.0
+        self.pid_mode = False
 
         if abs(msg.axes[1]) > 0.1 or abs(msg.axes[0]) > 0.1:
             # Direct control mode
-            desired_linear = self.linear_scale * msg.axes[1]  # [m/s]
-            desired_angular = self.angular_scale * msg.axes[0]  # [m/s]
-            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(desired_linear, desired_angular)
+            self.desired_linear = self.linear_scale * msg.axes[1]  # [m/s]
+            self.desired_angular = self.angular_scale * msg.axes[0]  # [m/s]
         elif abs(msg.axes[4]) > 0.1 or abs(msg.axes[3]) > 0.1:
-            # PID control mode
-            desired_linear = self.linear_scale * msg.axes[4]
-            desired_angular = self.angular_scale * msg.axes[3]
-
-            linear_error = desired_linear - self.linear_velocity[0]
-            angular_error = desired_angular - self.angular_velocity[0]
-
-            linear = desired_linear + self.linear_p * linear_error - self.linear_d * self.linear_acceleration[0]
-            angular = desired_angular + self.angular_p * angular_error - self.angular_d * self.angular_acceleration[0]
-
-            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
+            #Pid mode
+            self.pid_mode = True
+            self.desired_linear = self.linear_scale * msg.axes[4]  # [m/s]
+            self.desired_angular = self.angular_scale * msg.axes[3]  # [m/s]
 
         desired_twist = Twist()
-        desired_twist.linear.x = desired_linear
-        desired_twist.angular.z = desired_angular
+        desired_twist.linear.x = self.desired_linear
+        desired_twist.angular.z = self.desired_angular
         self.publish_desired_twist(desired_twist)
-        self.send_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
-        self.publish_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
 
-    def linear_velocity_callback(self, msg: Float32MultiArray):
-        """Update linear velocity with exponential smoothing"""
-        self.linear_velocity = np.array(msg.data)
-        old_smooth = self.linear_velocity_smooth
-        self.linear_velocity_smooth = self.linear_velocity_smooth * self.linear_alpha + self.linear_velocity * (1.0 - self.linear_alpha)
-        self.linear_acceleration = (self.linear_velocity_smooth - old_smooth) / self.timer_period
+    def estimated_twist_callback(self, msg: Twist):
+        """Update estimated twist"""
+        self.linear_velocity[0] = msg.linear.x
+        self.linear_velocity[1] = msg.linear.y
+        self.linear_velocity[2] = msg.linear.z
 
-    def angular_velocity_callback(self, msg: Float32MultiArray):
-        """Update angular velocity with exponential smoothing"""
-        self.angular_velocity = np.array(msg.data)
-        old_smooth = self.angular_velocity_smooth
-        self.angular_velocity_smooth = self.angular_velocity_smooth * self.angular_alpha + self.angular_velocity * (
-            1.0 - self.angular_alpha
-        )
-        self.angular_acceleration = (self.angular_velocity_smooth - old_smooth) / self.timer_period
+        self.angular_velocity[0] = msg.angular.x
+        self.angular_velocity[1] = msg.angular.y
+        self.angular_velocity[2] = msg.angular.z
 
     def frame_points_callback(self, msg: Float32MultiArray):
         """Update GOAT frame point vector and frame width for angular velocity calculations"""
         self.frame_points = np.array(msg.data).reshape(12, 3)
-        avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :] - self.frame_points[[5, 7, 10, 11], :], axis=1)
+        avg_distance = np.mean(self.frame_points[[1, 3, 8, 9], :], axis=0) - np.mean(self.frame_points[[5, 7, 10, 11], :], axis=0)
         self._frame_width = np.linalg.norm(avg_distance) - 0.1 # 0.1 comes from the 5 [cm] x 2 marker to wheel offset
         estimated_width = Float32()
         estimated_width.data = float(self._frame_width)
         self.estimated_width_publisher.publish(estimated_width)
+
+    def _motor_callback(self):
+        left_wheel_velocity = right_wheel_velocity = 0.0
+
+        if self.pid_mode is False:
+            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(self.desired_linear, self.desired_angular)
+        else:
+            # PID control mode
+            linear_error = self.desired_linear - self.linear_velocity[0]
+            angular_error = self.desired_angular - self.angular_velocity[2]
+
+            new_error_derivative = linear_error - self.old_linear_error
+            self.error_linear_d = self.linear_alpha * (new_error_derivative) + (1 - self.linear_alpha) * self.error_linear_d
+            self.old_linear_error = linear_error
+            linear = self.desired_linear + self.linear_p * linear_error - self.linear_d * self.error_linear_d
+
+
+            new_error_derivative = angular_error - self.old_angular_error
+            self.error_angular_d = self.angular_alpha * (new_error_derivative) + (1 - self.angular_alpha) * self.error_angular_d
+            self.old_angular_error = angular_error
+            self.error_angular_integral = self.error_angular_integral * 0.95 + angular_error
+            angular = self.desired_angular + self.angular_p * angular_error \
+                                            + self.angular_i * self.error_angular_integral \
+                                            + self.angular_d * self.error_angular_d
+
+            left_wheel_velocity, right_wheel_velocity = self._compute_wheel_velocities(linear, angular)
+                
+        self.send_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
+        self.publish_wheel_velocity(left_wheel_velocity, right_wheel_velocity)
 
     def _state_callback(self):
         """Timer callback for reading and publishing motor states"""
